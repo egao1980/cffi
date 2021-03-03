@@ -329,10 +329,7 @@ WITH-POINTER-TO-VECTOR-DATA."
   `(setf (gethash ',name *callbacks*)
          (alien-sap
           (sb-alien::alien-lambda
-            #+alien-callback-conventions
             (,convention ,(convert-foreign-type rettype))
-            #-alien-callback-conventions
-            ,(convert-foreign-type rettype)
             ,(mapcar (lambda (sym type)
                        (list sym (convert-foreign-type type)))
                arg-names arg-types)
@@ -350,8 +347,7 @@ WITH-POINTER-TO-VECTOR-DATA."
         error
         (sem (sb-thread:make-semaphore)))
     (sb-thread:interrupt-thread
-     ;; KLUDGE: find a better way to get the initial thread.
-     (car (last (sb-thread:list-all-threads)))
+     sb-thread::*initial-thread*
      (lambda ()
        (multiple-value-setq (result error)
          (ignore-errors (apply fn args)))

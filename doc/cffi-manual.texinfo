@@ -1848,13 +1848,16 @@ respectively.
 @ForeignType{:uint32}
 @ForeignType{:int64}
 @ForeignType{:uint64}
+@ForeignType{:size}
+@ForeignType{:ssize}
+@ForeignType{:intptr}
+@ForeignType{:uintptr}
+@ForeignType{:ptrdiff}
+@ForeignType{:offset}
 
 Foreign integer types of specific sizes, corresponding to the C types
 defined in @code{stdint.h}.
 
-@c @ForeignType{:size}
-@c @ForeignType{:ssize}
-@c @ForeignType{:ptrdiff}
 @c @ForeignType{:time}
 
 @c Foreign integer types corresponding to the standard C types (without
@@ -2526,7 +2529,7 @@ CFFI-USER> (code-char (mem-aref * :char 5))
 @Macro{defbitfield name-and-options &body masks}
 
 masks ::= [docstring] @{ (symbol value) @}* @*
-name-and-options ::= name | (name &optional (base-type :int))
+name-and-options ::= name | (name &optional (base-type :int)) @*
 
 @subheading Arguments and Values
 
@@ -2610,8 +2613,7 @@ CFFI> (unix-open "/tmp/foo" '(:wronly :creat) #o644)
 @subheading Syntax
 @Macro{defcstruct name-and-options &body doc-and-slots @res{} name}
 
-name-and-options ::= structure-name | (structure-name &key size)
-
+name-and-options ::= structure-name | (structure-name &key size) @*
 doc-and-slots ::= [docstring] @{ (slot-name slot-type &key count offset) @}*
 
 @subheading Arguments and Values
@@ -2820,8 +2822,8 @@ you should use @ref{define-foreign-type}.
 @subheading Syntax
 @Macro{defcenum name-and-options &body enum-list}
 
-enum-list ::= [docstring] @{ keyword | (keyword value) @}*
-name-and-options ::= name | (name &optional (base-type :int))
+enum-list ::= [docstring] @{ keyword | (keyword value) @}* @*
+name-and-options ::= name | (name &optional (base-type :int) &key allow-undeclared-values) @*
 
 @subheading Arguments and Values
 
@@ -2834,6 +2836,10 @@ A documentation string, ignored.
 
 @item base-type
 A symbol denoting a foreign type.
+
+@item allow-undeclared-values
+Whether to pass through integer values that were not explicitly declared
+in the enum when translating from foreign memory.
 
 @item keyword
 A keyword symbol.
@@ -2855,6 +2861,14 @@ Keywords will be automatically converted to values and vice-versa when
 being passed as arguments to or returned from foreign functions,
 respectively. The same applies to any other situations where an object
 of an @code{enum} type is expected.
+
+If a value should be translated to lisp that is not declared in the
+enum, an error will be signalled. You can elide this error and instead
+make it pass the original enum value by specifying
+@var{allow-undeclared-values}. This can be useful for very large
+enumerations of which we only care about a subset of values, or for
+enumerations that should allow for client or vendor extensions that we
+cannot know about.
 
 Types defined with @code{defcenum} canonicalize to @var{base-type}
 which is @code{:int} by default.
@@ -4654,7 +4668,7 @@ CFFI> (pointer-eq (null-pointer) (null-pointer))
 @anchor{with-foreign-objects}
 @Macro{with-foreign-objects (bindings) &body body}
 
-bindings ::= @{(var type &optional count)@}*
+bindings ::= @{(var type &optional count)@}* @*
 
 @subheading Arguments and Values
 
@@ -5025,7 +5039,7 @@ CFFI> (with-foreign-pointer-as-string (str 255)
 @anchor{with-foreign-strings}
 @Macro{with-foreign-strings (bindings) &body body}
 
-var-or-vars ::= var | (var &optional octet-size-var)
+var-or-vars ::= var | (var &optional octet-size-var) @*
 bindings ::= @{(var-or-vars string &rest args)@}*
 
 @subheading Arguments and Values
@@ -5128,7 +5142,7 @@ Dictionary
 @Macro{defcvar name-and-options type &optional documentation @res{} lisp-name}
 
 @var{name-and-options} ::= name | (name &key read-only (library :default)) @*
-@var{name} ::= lisp-name [foreign-name] | foreign-name [lisp-name]
+@var{name} ::= lisp-name [foreign-name] | foreign-name [lisp-name] @*
 
 @subheading Arguments and Values
 
@@ -6055,8 +6069,8 @@ CFFI> (let ((lib (load-foreign-library '(:framework "OpenGL"))))
 
 @Macro{define-foreign-library name-and-options @{ load-clause @}* @res{} name}
 
-name-and-options ::= name | (name &key convention search-path)
-load-clause ::= (feature library &key convention search-path)
+name-and-options ::= name | (name &key canary convention search-path) @*
+load-clause ::= (feature library &key convention search-path) @*
 
 @subheading Arguments and Values
 
@@ -6069,6 +6083,15 @@ A feature expression.
 
 @item library
 A library designator.
+
+@item canary
+A string denoting a foreign symbol that will be searched in core
+before attempting to load the library. If that symbol is found, the
+library is assumed to be statically linked and
+@code{load-foreign-library} only marks the library as loaded.
+
+Some implementations (Clisp, ECL, SBCL) natively support static
+linking, sometimes referred to as a @emph{link kit}.
 
 @item convention
 One of @code{:cdecl} (default) or @code{:stdcall}
@@ -6479,8 +6502,8 @@ CFFI> (callback sum)
 @subheading Syntax
 @Macro{defcallback name-and-options return-type arguments &body body @res{} name}
 
-name-and-options ::= name | (name &key convention)
-arguments ::= (@{ (arg-name arg-type) @}*)
+name-and-options ::= name | (name &key convention) @*
+arguments ::= (@{ (arg-name arg-type) @}*) @*
 
 @subheading Arguments and Values
 
@@ -6976,13 +6999,21 @@ invocation.
 @node Static Linking, Limitations, The Groveller, Top
 @chapter Static Linking
 
-On recent enough versions of supported implementations (currently,
-GNU CLISP 2.49, CMUCL 2015-11, and SBCL 1.2.17), and with a recent
-enough ASDF (3.1.2 or later), you can create a statically linked
-Lisp executable image that includes all the C extensions
-(wrappers and any other objects output by @code{compile-op})
-as well as your Lisp code --- or a standalone application executable.
-This makes it easier to deliver your code as a single file.
+On recent enough versions of supported implementations (currently, GNU
+CLISP 2.49 or later, CMUCL 2015-11 or later, and SBCL 1.2.17 or later,
+except SBCL 2.0.4), and with a recent enough ASDF (3.1.2 or later),
+you can create a statically linked Lisp executable image (or a
+standalone application executable) that includes all the C extensions
+defined via @ref{The Groveller}'s @code{:cffi-wrapper-file} ASDF
+components (and any other such objects output by
+@code{asdf:compile-op}), as well as those defined by @code{:c-file} or
+@code{:o-file} ASDF components, and your Lisp code.  This makes it
+easier to deliver your code as a single file.
+
+Note that the resulting binary will typically still depend on any
+shared libraries loaded via @xref{load-foreign-library} or
+@xref{use-foreign-library} as well as core libraries such as
+@code{libc}.
 
 To dump a statically linked executable image, use:
 

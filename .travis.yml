@@ -1,12 +1,14 @@
+os: linux
+dist: bionic
+language: generic
+
 branches:
   only:
     - master
     - enum-field-references
 
-language: lisp
-
 env:
-  matrix:
+  jobs:
     #- LISP=abcl
     #- LISP=allegro
     - LISP=sbcl
@@ -18,7 +20,7 @@ env:
     #- LISP=cmucl
     #- LISP=ecl
 
-matrix:
+jobs:
   allow_failures:
     - env: LISP=ccl32
     - env: LISP=sbcl32
@@ -36,5 +38,3 @@ script:
   - cl -e '(ql:quickload :cffi-tests)
            (when (cffi-tests:run-all-cffi-tests)
              (uiop:quit 1))'
-
-sudo: required
