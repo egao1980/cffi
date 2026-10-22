@@ -98,6 +98,18 @@ dynamical foreign function interface; :DLOPEN when using C code and
 dynamical references to symbols; :C/C++ for C/C++ code with static
 references to symbols.")
 
+;;; The macros below pick the method when they expand, i.e. under the
+;;; compile-time *FEATURES*. COMPILE-FILE :TARGET binds those to the
+;;; target's, so a host compiler with DFFI still emits link-time
+;;; references for a target without it (iOS, wasm), and the
+;;; :CFFI-STATIC-LINK feature forces them for static executables.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun compile-time-ecl-method ()
+    (cond ((member :cffi-static-link *features*) :c/c++)
+          ((and (eq *cffi-ecl-method* :dffi) (not (member :dffi *features*)))
+           (if (member :dlopen *features*) :dlopen :c/c++))
+          (t *cffi-ecl-method*))))
+
 ;;;# Mis-features
 
 #-long-long
@@ -327,7 +339,7 @@ WITH-POINTER-TO-VECTOR-DATA."
       :bytecodes
       ,(dffi-function-pointer-call name types values return-type)
       :c/c++
-      ,(ecase *cffi-ecl-method*
+      ,(ecase (compile-time-ecl-method)
          (:dffi   (dffi-function-pointer-call name types values return-type))
          (:dlopen (c-inline-function-call name types types values return-type t nil))
          (:c/c++  (c-inline-function-call name types types values return-type nil nil))))))
@@ -341,7 +353,7 @@ WITH-POINTER-TO-VECTOR-DATA."
       :bytecodes
       ,(dffi-function-pointer-call pointer types values return-type)
       :c/c++
-      ,(if (eq *cffi-ecl-method* :dffi)
+      ,(if (eq (compile-time-ecl-method) :dffi)
            (dffi-function-pointer-call pointer types values return-type)
            (c-inline-function-call pointer types types values return-type t nil)))))
 
@@ -357,7 +369,7 @@ WITH-POINTER-TO-VECTOR-DATA."
          :bytecodes
          ,(dffi-function-pointer-call name all-types values return-type)
          :c/c++
-         ,(ecase *cffi-ecl-method*
+         ,(ecase (compile-time-ecl-method)
             (:dffi   (dffi-function-pointer-call name all-types values return-type))
             (:dlopen (c-inline-function-call name fixed-types all-types values return-type t t))
             (:c/c++  (c-inline-function-call name fixed-types all-types values return-type nil t))))))))
@@ -374,7 +386,7 @@ WITH-POINTER-TO-VECTOR-DATA."
          :bytecodes
          ,(dffi-function-pointer-call pointer all-types values return-type)
          :c/c++
-         ,(if (eq *cffi-ecl-method* :dffi)
+         ,(if (eq (compile-time-ecl-method) :dffi)
             (dffi-function-pointer-call pointer all-types values return-type)
             (c-inline-function-call pointer fixed-types all-types values return-type t t)))))))
 

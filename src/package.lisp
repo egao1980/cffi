@@ -112,6 +112,7 @@
 
    ;; Foreign library operations.
    #:*foreign-library-directories*
+   #:*foreign-libraries-linked*
    #:*darwin-framework-directories*
    #:foreign-library
    #:foreign-library-load-state
