@@ -131,6 +131,21 @@
 (defvar *foreign-libraries* (make-hash-table :test 'eq)
   "Hashtable of defined libraries.")
 
+(defvar *foreign-libraries-linked*
+  #+cffi-static-link t
+  #-cffi-static-link nil
+  "Libraries whose code is already linked into the image, so loading them
+marks them :STATIC instead of opening a shared object: T for every
+library, or a list of names given to DEFINE-FOREIGN-LIBRARY. Images
+compiled with the :CFFI-STATIC-LINK feature (static executables, iOS,
+wasm) default to T. A library spec of :LINKED does the same per platform:
+  (define-foreign-library libuv (:ios :linked) (t (:default \"libuv\")))")
+
+(defun foreign-library-linked-p (name spec)
+  (or (eq spec :linked)
+      (eq *foreign-libraries-linked* t)
+      (member name *foreign-libraries-linked*)))
+
 (defclass foreign-library ()
   ((name :initform nil :initarg :name :accessor foreign-library-name)
    (type :initform :system :initarg :type)
@@ -379,6 +394,8 @@ This will need to be extended as we test on more OSes."
   (flet ((%do-load (lib name spec)
            (let ((canary (getf (foreign-library-options lib) :canary)))
              (cond
+               ((foreign-library-linked-p name spec)
+                (setf (foreign-library-load-state lib) :static))
                ((and canary (foreign-symbol-pointer canary))
                 ;; Do nothing because the library is already loaded.
                 (setf (foreign-library-load-state lib) :static))
